@@ -3,3 +3,6 @@ states_21basic
 
 # Leave out the data files for now
 *.csv
+
+# Leave out junk
+*~
