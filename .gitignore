@@ -1,0 +1,5 @@
+# Leave out the map file directory
+states_21basic
+
+# Leave out the data files for now
+*.csv

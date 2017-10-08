@@ -1,0 +1,209 @@
+---
+title: "Not All Beers Are Created Equal(ly Alcoholic)"
+author: "Sean Barnett"
+date: "February 12, 2017"
+output: 
+  html_document:
+    toc: true
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r read_and_clean, message=FALSE}
+library(stringr)
+library(dplyr)
+library(maps)
+library(ggplot2)
+library(caret)
+
+beers <- read.csv("beers.csv", stringsAsFactors = FALSE)
+breweries <- read.csv("breweries.csv", stringsAsFactors = FALSE)
+colnames(breweries)[1] <- "brewery_id"
+
+# Clean up the string data a bit
+beers$name <- str_trim(beers$name)
+beers$style <- str_trim(beers$style)
+breweries$name <- str_trim(breweries$name)
+breweries$city <- str_trim(breweries$city)
+breweries$state <- str_trim(breweries$state)
+
+# Match brewery information to beer
+beer.data <- merge(beers, breweries, by="brewery_id")
+colnames(beer.data)[2] <- "beer_id"
+colnames(beer.data)[6] <- "beer_name"
+colnames(beer.data)[9] <- "brewery_name"
+```
+
+## Alcohol Content
+
+Taking considerable inspiration from the kernel "Where are the hop heads (WIP)", I wanted to conduct a similar analysis, but with regards to a beer's alcohol content. In the process of doing so, I broke into mapping with R, as well as re-engaging with my old friend, the _caret_ package.
+
+We begin below, with my maps of number of beers per state for each of four ABV levels (low (<4.5%), medium (4.5-6%), high (6-8%), and very high (>8%)):
+
+```{r beer_maps}
+# Generate data frames for choropleths
+lo.abv <- filter(beer.data, abv < 0.045)
+med.abv <- filter(beer.data, 0.045 <= abv, abv < 0.06)
+hi.abv <- filter(beer.data, 0.06 <= abv, abv < 0.08)
+vhi.abv <- filter(beer.data, 0.08 <= abv)
+
+loabv.df <- data.frame(table(factor(lo.abv$state, levels = c(state.abb, "DC"))))
+medabv.df <- data.frame(table(factor(med.abv$state, levels = c(state.abb, "DC"))))
+hiabv.df <- data.frame(table(factor(hi.abv$state, levels = c(state.abb, "DC"))))
+vhiabv.df <- data.frame(table(factor(vhi.abv$state, levels = c(state.abb, "DC") )))
+
+# Prep for mapping
+loabv.df$Var1 <- tolower(state.name[match(loabv.df$Var1, c(state.abb, "DC"))])
+medabv.df$Var1 <- tolower(state.name[match(medabv.df$Var1, c(state.abb, "DC"))])
+hiabv.df$Var1 <- tolower(state.name[match(hiabv.df$Var1, c(state.abb, "DC"))])
+vhiabv.df$Var1 <- tolower(state.name[match(vhiabv.df$Var1, c(state.abb, "DC"))])
+states.map <- map_data("state")
+
+# Put together some choropleths
+loabv.map <- ggplot(loabv.df, aes(map_id = Var1)) +
+  geom_map(aes(fill = Freq), map = states.map) +
+  expand_limits(x = states.map$long, y = states.map$lat) + 
+  labs(x = "Longitude", y = "Latitude", 
+       title = "Low Alcohol Beer (<4.5% ABV) by State")
+
+medabv.map <- ggplot(medabv.df, aes(map_id = Var1)) +
+  geom_map(aes(fill = Freq), map = states.map) +
+  expand_limits(x = states.map$long, y = states.map$lat) + 
+  labs(x = "Longitude", y = "Latitude", 
+       title = "Medium Alcohol Beer (4.5-6% ABV) by State")
+
+hiabv.map <- ggplot(hiabv.df, aes(map_id = Var1)) +
+  geom_map(aes(fill = Freq), map = states.map) +
+  expand_limits(x = states.map$long, y = states.map$lat) + 
+  labs(x = "Longitude", y = "Latitude", 
+       title = "High Alcohol Beer (6-8% ABV) by State")
+
+vhiabv.map <- ggplot(vhiabv.df, aes(map_id = Var1)) +
+  geom_map(aes(fill = Freq), map = states.map) +
+  expand_limits(x = states.map$long, y = states.map$lat) + 
+  labs(x = "Longitude", y = "Latitude", 
+       title = "Very High Alcohol Beer (>8% ABV) by State")
+```
+```{r plot_beer_maps, echo=FALSE}
+plot(loabv.map)
+plot(medabv.map)
+plot(hiabv.map)
+plot(vhiabv.map)
+```
+
+### Analysis
+
+Short of actually fetching me another beer when my current one runs dry, it doesn't seem that there is much that _ggplot2_ can't do.
+
+One thing that the maps show us pretty clearly is that Colorado is a big-time producer of beers of nearly every alcohol level. The only alcohol level where the Centennial State isn't producing the largest numbers of is in the low alcohol category, where it still rates as a moderate producer.
+
+California also proves to be a consistently large producer of beers across the alcohol spectrum, as well as Oregon. Interestingly, where Colorado produces least, Oregon produces most, and vice versa. Other notable producers appear to be the four states on Lake Michigan, and Texas. Utah makes a large showing for low alcohol beers.
+
+Eventually, I would like to improve on these maps to include, among other things, the 49th and 50th states. Don't be surprised if a city-by-city breakdown appears in a future version as well.
+
+## Predict ABV Level
+
+Naturally, when presented with data like this, it only makes sense to want to determine if there is some model that can be created to demonstrate a clear relationship between ABV and the other variables.
+
+To begin with, we'll need to prep some data:
+
+```{r prep_model_data}
+model.beer.data <- select(beer.data, abv, ibu, style, 
+                          brewery_name, city, state)
+model.beer.data <- filter(model.beer.data, !is.na(abv))
+model.beer.data$style <- factor(model.beer.data$style)
+model.beer.data$brewery_name <- factor(model.beer.data$brewery_name)
+model.beer.data$city <- factor(model.beer.data$city)
+model.beer.data$state <- factor(model.beer.data$state)
+```
+
+I've opted to omit a few variables that seemed extraneous or otherwise of little use, particularly beer and brewery IDs and serving sizes. IDs, it would seem, have little relationship at all, except by sheer coincidence. Serving sizes, though potentially useful, have little variance and probably little relationship with ABV as well. Obviously, we can't reliably train a model for ABV when an ABV value isn't available, so those cases are removed.
+
+```{r pre_process}
+# Create dummy variables for the regression
+beer.dummy <- dummyVars(~ ., data = model.beer.data)
+dummied.data <- 
+  data.frame(predict(beer.dummy, newdata = model.beer.data))
+
+# Identify and remove near zero variance predictors
+nzv <- nearZeroVar(dummied.data)
+beer.final <- dummied.data[,-nzv]
+
+# Impute missing values for IBU
+pp <- preProcess(beer.final, method = c("knnImpute"))
+pp.beer.data <- predict(pp, newdata = beer.final)
+
+# Split into training and test groups
+set.seed(777)
+idx <- createDataPartition(pp.beer.data$abv,
+                           times = 1,
+                           p = 0.85,
+                           list = FALSE)
+beer.train <- pp.beer.data[idx,]
+beer.test <- pp.beer.data[-idx,]
+beer.test.nolabel <- select(beer.test, -abv)
+```
+
+Preparing data for the model, we do a little bit of pre-processing before splitting the data into test and training sets. The _caret_ package has some powerful facilities for accomplishing this. I have opted to use K-nearest neighbors to impute missing IBU values. This would also impute missing ABV values had we left them in, but not many were missing, and I'd prefer to train only against provided data for the output.
+
+Lastly, labels are removed from the test set that was held out, to help test the robustness of the model a bit later on.
+
+```{r train, warning=FALSE, message=FALSE}
+library(doParallel)
+
+seeds <- vector(mode = "list", length = 11)
+
+# CV models
+for(k in 1:10)
+  seeds[[k]] <- sample.int(1000, 1)
+
+# Final model
+seeds[[11]] <- sample.int(1000, 1)
+
+# Control params
+lm.control <- trainControl(method = "cv", seeds = seeds, number = 10)
+
+cl <- makeCluster(detectCores())
+registerDoParallel(cl)
+
+# Train!
+beer.lm <- train(abv ~ ., 
+                 method = "lm", 
+                 data = pp.beer.data, 
+                 trControl = lm.control)
+stopCluster(cl)
+```
+
+Now we set the seeds and control parameters. In an effort to get the best model, we'll do 10-fold cross-validation. To speed up the CV we'll parallelize the process.
+
+### Training results
+
+Checking against all the parameters we specified in the beer training data, let's see how we did:
+
+```{r model1}
+beer.lm$results
+```
+
+Not ideal, but could be worse I guess. A little over 58% of the variance is explained by this model. Let's look to the variable importance for this model given back by _caret_ to see what figured most into our model.
+
+```{r variable_import1}
+varImp(beer.lm)
+```
+
+Clearly, IBU has considerable predictive value for assessing the alcohol level of a beer. Style is also a prominent predictor, unsurprisingly. In another, not-at-all twist, some of America's biggest craft beer-producing states carried some pretty heavy predictive weight.
+
+### Test Results
+
+The moment of truth has come. Let's test out the results against the test set held out, just to see what kind of results we really get. If we at least get something approaching the R-squared value, that would be in keeping with the cross-validation check.
+
+```{r test}
+predictions <- predict(beer.lm, newdata = beer.test.nolabel)
+postResample(predictions, beer.test$abv)
+```
+
+We predict the results and then use _caret_'s RMSE and R^2^ functions to evaluate the test results. The RMSE comes out lower than in the cross-validation results and we get an improved R^2^ result, where nearly 62% of the variance is covered.
+
+Surely there are considerable improvements that could be made to this model. For a quick stab at it though, I'm not terribly displeased, especially seeing that testing on unseen data actually yielded a better result than what the CV results predicted.
