@@ -6,3 +6,7 @@ states_21basic
 
 # Leave out junk
 *~
+.Rproj.user
+.RData
+.Rhistory
+*.Rproj
