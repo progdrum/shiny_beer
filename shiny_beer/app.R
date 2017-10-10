@@ -1,5 +1,5 @@
 library(shiny)
-library(ggplot2)
+
 
 # Define UI for application
 ui <- fluidPage(
@@ -24,6 +24,11 @@ ui <- fluidPage(
 
 # Define server logic required to draw a histogram
 server <- function(input, output) {
+  # Load the external file for some helper functions
+  source("../beer_functions.R")
+  test <- read_and_clean("../beers.csv", "../breweries.csv") %>% 
+    get_abv_dfs %>% 
+    make_maps
    
    output$distPlot <- renderPlot({
       # generate bins based on input$bins from ui.R
