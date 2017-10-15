@@ -1,12 +1,12 @@
 # Leave out the map file directory
 states_21basic
-
 # Leave out the data files for now
 *.csv
-
 # Leave out junk
 *~
 .Rproj.user
 .RData
 .Rhistory
 *.Rproj
+logs
+derby.log

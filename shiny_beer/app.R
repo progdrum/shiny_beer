@@ -3,16 +3,14 @@ library(shiny)
 
 # Define UI for application
 ui <- fluidPage(
-   titlePanel("Beer Maps by ABV (% Alcohol By Volume"),
+   titlePanel("Beer Maps by ABV (% Alcohol By Volume)"),
    
    # Sidebar with a slider input for number of bins 
    sidebarLayout(
       sidebarPanel(
-         sliderInput("bins",
-                     "Number of bins:",
-                     min = 1,
-                     max = 50,
-                     value = 30)
+         selectInput("abv_select",
+                     "Select Alcohol Level",
+                     choices = c('Low', 'Medium', 'High', 'Very High'))
       ),
       
       # Show a plot of the generated distribution
@@ -26,18 +24,21 @@ ui <- fluidPage(
 server <- function(input, output) {
   # Load the external file for some helper functions
   source("../beer_functions.R")
-  test <- read_and_clean("../beers.csv", "../breweries.csv") %>% 
+  map_list <- read_and_clean("../beers.csv", "../breweries.csv") %>% 
     get_abv_dfs %>% 
     make_maps
    
    output$distPlot <- renderPlot({
-      # generate bins based on input$bins from ui.R
-      x    <- faithful[, 2] 
-      bins <- seq(min(x), max(x), length.out = input$bins + 1)
-      
-      # draw the histogram with the specified number of bins
-      ggplot(data = x) + geom_histogram(bins = bins)
-      # hist(x, breaks = bins, col = 'darkgray', border = 'white')
+      # Draw the map with the specified ABV data
+      if (input$abv_select == "Low") {
+        map_list$lo
+      } else if (input$abv_select == "Medium") {
+        map_list$med
+      } else if (input$abv_select == "High") {
+        map_list$hi
+      } else {
+        map_list$vhi
+      }
    })
 }
 

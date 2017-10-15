@@ -79,4 +79,9 @@ make_maps <- function(abv_dfs) {
     expand_limits(x = mdata$long, y = mdata$lat) + 
     labs(x = "Longitude", y = "Latitude", 
          title = "Very High Alcohol Beer (>8% ABV) by State")
+  
+  return(list("lo" = loabv.map, 
+              "med" = medabv.map, 
+              "hi" = hiabv.map, 
+              "vhi" = vhiabv.map))
 }
