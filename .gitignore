@@ -1,7 +1,9 @@
 # Leave out the map file directory
 states_21basic
+
 # Leave out the data files for now
 *.csv
+
 # Leave out junk
 *~
 .Rproj.user
@@ -10,3 +12,4 @@ states_21basic
 *.Rproj
 logs
 derby.log
+shiny_beer/rsconnect
